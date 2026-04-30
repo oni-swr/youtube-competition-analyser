@@ -60,13 +60,13 @@ export function App() {
     }
   }
 
-  const fetchAnalysis = async () => {
+  const loadChannelAnalysis = async (channelValue: string) => {
     const apiKey = withApiKey()
     if (!apiKey) return
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchChannelVideos(analysisInput, apiKey)
+      const result = await fetchChannelVideos(channelValue, apiKey)
       setAnalysisTitle(result.channelTitle)
       setAnalysisVideos(result.videos)
     } catch (fetchError) {
@@ -74,6 +74,17 @@ export function App() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchAnalysis = async () => {
+    await loadChannelAnalysis(analysisInput)
+  }
+
+  const handleChannelClick = async (channel: ChannelMetrics) => {
+    const channelValue = `https://www.youtube.com/channel/${channel.id}`
+    setAnalysisInput(channelValue)
+    setActiveTab('channel-analysis')
+    await loadChannelAnalysis(channelValue)
   }
 
   return (
@@ -97,7 +108,7 @@ export function App() {
             <label htmlFor="cpm-input" style={{ display: 'block', marginBottom: 8, color: theme.mutedText }}>CPM value (USD)</label>
             <input id="cpm-input" type="number" min={0} step="0.01" value={cpmInput} onChange={(event) => setCpmInput(event.target.value)} placeholder="e.g. 5.50" style={{ width: '100%', maxWidth: 240, padding: 10, borderRadius: 8, border: `1px solid ${theme.panelBorder}`, backgroundColor: theme.inputBg, color: theme.text }} />
           </section>
-          {rows.length > 0 ? <ChannelTable rows={rows} darkMode={darkMode} cpm={cpm} /> : null}
+          {rows.length > 0 ? <ChannelTable rows={rows} darkMode={darkMode} cpm={cpm} onChannelClick={handleChannelClick} /> : null}
         </>
       ) : (
         <>
