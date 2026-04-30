@@ -1,10 +1,18 @@
-import { createColumnHelper, flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table'
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type SortingState
+} from '@tanstack/react-table'
 import type { ChannelMetrics } from '../lib/youtube'
 
 const columnHelper = createColumnHelper<ChannelMetrics>()
 
 export function ChannelTable({ rows, darkMode = false, cpm }: { rows: ChannelMetrics[]; darkMode?: boolean; cpm: number | null }) {
+  const [sorting, setSorting] = useState<SortingState>([])
   const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
 
   const columns = useMemo(
@@ -22,53 +30,83 @@ export function ChannelTable({ rows, darkMode = false, cpm }: { rows: ChannelMet
         header: 'Total views',
         cell: ({ getValue }) => getValue().toLocaleString()
       }),
-      columnHelper.display({
-        id: 'viewsPerSubscriber',
-        header: 'Views / sub',
-        cell: ({ row }) => {
-          const subscribers = row.original.subscriberCount
-          const views = row.original.viewCount
-          if (subscribers === 0) {
-            return 'N/A'
+      columnHelper.accessor(
+        (row) => {
+          if (row.subscriberCount === 0) {
+            return Number.NEGATIVE_INFINITY
           }
-          return (views / subscribers).toFixed(2)
+          return row.viewCount / row.subscriberCount
+        },
+        {
+          id: 'viewsPerSubscriber',
+          header: 'Views / sub',
+          cell: ({ getValue }) => {
+            const value = getValue()
+            if (value === Number.NEGATIVE_INFINITY) {
+              return 'N/A'
+            }
+            return value.toFixed(2)
+          }
         }
-      }),
-      columnHelper.display({
-        id: 'estimatedRevenue',
-        header: 'Est. revenue',
-        cell: ({ row }) => {
+      ),
+      columnHelper.accessor(
+        (row) => {
           if (cpm === null) {
-            return 'N/A'
+            return Number.NEGATIVE_INFINITY
           }
-
-          const estimate = (row.original.viewCount / 1000) * cpm
-          return `$${estimate.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+          return (row.viewCount / 1000) * cpm
+        },
+        {
+          id: 'estimatedRevenue',
+          header: 'Est. revenue',
+          cell: ({ getValue }) => {
+            const value = getValue()
+            if (value === Number.NEGATIVE_INFINITY) {
+              return 'N/A'
+            }
+            return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+          }
         }
-      })
+      )
     ],
     [cpm]
   )
 
-  const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() })
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel()
+  })
 
   return (
     <table style={{ borderCollapse: 'collapse', width: '100%', marginTop: 16 }}>
       <thead>
         {table.getHeaderGroups().map((headerGroup) => (
           <tr key={headerGroup.id}>
-            {headerGroup.headers.map((header) => (
-              <th
-                key={header.id}
-                style={{
-                  textAlign: 'left',
-                  borderBottom: `1px solid ${borderColor}`,
-                  padding: 8
-                }}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </th>
-            ))}
+            {headerGroup.headers.map((header) => {
+              const sortDirection = header.column.getIsSorted()
+              const sortIndicator = sortDirection === 'asc' ? ' ↑' : sortDirection === 'desc' ? ' ↓' : ''
+
+              return (
+                <th
+                  key={header.id}
+                  onClick={header.column.getToggleSortingHandler()}
+                  style={{
+                    textAlign: 'left',
+                    borderBottom: `1px solid ${borderColor}`,
+                    padding: 8,
+                    cursor: header.column.getCanSort() ? 'pointer' : 'default',
+                    userSelect: 'none'
+                  }}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  {sortIndicator}
+                </th>
+              )
+            })}
           </tr>
         ))}
       </thead>
