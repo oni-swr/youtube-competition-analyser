@@ -15,14 +15,20 @@ const columns = [
   columnHelper.accessor('title', { header: 'Channel' }),
   columnHelper.accessor('subscriberCount', {
     header: 'Subscribers',
+    enableSorting: true,
+    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
   columnHelper.accessor('videoCount', {
     header: 'Videos',
+    enableSorting: true,
+    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
   columnHelper.accessor('viewCount', {
     header: 'Total views',
+    enableSorting: true,
+    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
   columnHelper.display({
