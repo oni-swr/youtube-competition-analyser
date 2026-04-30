@@ -6,7 +6,7 @@ type FormatFilter = 'all' | 'short' | 'long'
 
 export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVideo[]; darkMode?: boolean }) {
   const [sortMode, setSortMode] = useState<SortMode>('outlier')
-  const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('long')
   const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
 
   const sortedVideos = useMemo(() => {
