@@ -55,15 +55,8 @@ export function App() {
     document.body.style.backgroundColor = theme.pageBg
   }, [theme.pageBg])
 
-
-  const totalViews = useMemo(
-    () => rows.reduce((sum, row) => sum + row.viewCount, 0),
-    [rows]
-  )
-
   const cpmValue = Number(cpmInput)
-  const estimatedRevenue = Number.isFinite(cpmValue) ? (totalViews / 1000) * cpmValue : 0
-  const showRevenue = rows.length > 0 && cpmInput.trim().length > 0
+  const cpm = cpmInput.trim().length > 0 && Number.isFinite(cpmValue) ? cpmValue : null
 
   const fetchData = async () => {
     const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
@@ -126,38 +119,31 @@ export function App() {
           {loading ? 'Loading…' : 'Analyse competitors'}
         </button>
       </div>
+      <section style={{ marginTop: 16 }}>
+        <label htmlFor="cpm-input" style={{ display: 'block', marginBottom: 8, color: theme.mutedText }}>
+          CPM value (USD)
+        </label>
+        <input
+          id="cpm-input"
+          type="number"
+          min={0}
+          step="0.01"
+          value={cpmInput}
+          onChange={(event) => setCpmInput(event.target.value)}
+          placeholder="e.g. 5.50"
+          style={{
+            width: '100%',
+            maxWidth: 240,
+            padding: 10,
+            borderRadius: 8,
+            border: `1px solid ${theme.panelBorder}`,
+            backgroundColor: theme.inputBg,
+            color: theme.text
+          }}
+        />
+      </section>
       {error ? <p style={{ color: '#ff6b6b' }}>{error}</p> : null}
-      {rows.length > 0 ? <ChannelTable rows={rows} darkMode={darkMode} /> : null}
-      {rows.length > 0 ? (
-        <section style={{ marginTop: 16 }}>
-          <label htmlFor="cpm-input" style={{ display: 'block', marginBottom: 8, color: theme.mutedText }}>
-            CPM value (USD)
-          </label>
-          <input
-            id="cpm-input"
-            type="number"
-            min={0}
-            step="0.01"
-            value={cpmInput}
-            onChange={(event) => setCpmInput(event.target.value)}
-            placeholder="e.g. 5.50"
-            style={{
-              width: '100%',
-              maxWidth: 240,
-              padding: 10,
-              borderRadius: 8,
-              border: `1px solid ${theme.panelBorder}`,
-              backgroundColor: theme.inputBg,
-              color: theme.text
-            }}
-          />
-          {showRevenue ? (
-            <p style={{ marginTop: 12 }}>
-              Estimated revenue: ${estimatedRevenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </p>
-          ) : null}
-        </section>
-      ) : null}
+      {rows.length > 0 ? <ChannelTable rows={rows} darkMode={darkMode} cpm={cpm} /> : null}
     </main>
   )
 }
