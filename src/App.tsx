@@ -14,6 +14,24 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<ChannelMetrics[]>([])
 
+  const theme = darkMode
+    ? {
+        pageBg: '#1f1f1f',
+        panelBg: '#262626',
+        panelBorder: '#3a3a3a',
+        text: '#f4f4f5',
+        mutedText: '#d4d4d8',
+        inputBg: '#2d2d2d'
+      }
+    : {
+        pageBg: '#f3f4f6',
+        panelBg: '#ffffff',
+        panelBorder: '#d4d4d8',
+        text: '#111111',
+        mutedText: '#3f3f46',
+        inputBg: '#ffffff'
+      }
+
   const channels = useMemo(
     () => rawInput.split('\n').map((line) => line.trim()).filter(Boolean),
     [rawInput]
@@ -26,6 +44,10 @@ export function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.darkMode, String(darkMode))
   }, [darkMode])
+
+  useEffect(() => {
+    document.body.style.backgroundColor = theme.pageBg
+  }, [theme.pageBg])
 
   const fetchData = async () => {
     const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY
@@ -55,8 +77,10 @@ export function App() {
         padding: 24,
         fontFamily: 'Inter, Arial, sans-serif',
         minHeight: '100vh',
-        backgroundColor: darkMode ? '#0d1117' : '#ffffff',
-        color: darkMode ? '#e6edf3' : '#111111',
+        backgroundColor: theme.panelBg,
+        color: theme.text,
+        border: `1px solid ${theme.panelBorder}`,
+        borderRadius: 12,
         transition: 'background-color 0.2s ease, color 0.2s ease'
       }}
     >
@@ -66,7 +90,7 @@ export function App() {
           {darkMode ? 'Light mode' : 'Dark mode'}
         </button>
       </div>
-      <p>Paste one channel URL, handle, or username per line.</p>
+      <p style={{ color: theme.mutedText }}>Paste one channel URL, handle, or username per line.</p>
       <textarea
         value={rawInput}
         onChange={(event) => setRawInput(event.target.value)}
@@ -75,9 +99,9 @@ export function App() {
           width: '100%',
           padding: 10,
           borderRadius: 8,
-          border: darkMode ? '1px solid #30363d' : '1px solid #ccc',
-          backgroundColor: darkMode ? '#161b22' : '#ffffff',
-          color: darkMode ? '#e6edf3' : '#111111'
+          border: `1px solid ${theme.panelBorder}`,
+          backgroundColor: theme.inputBg,
+          color: theme.text
         }}
         placeholder={'https://www.youtube.com/@MrBeast\nhttps://www.youtube.com/user/PewDiePie'}
       />

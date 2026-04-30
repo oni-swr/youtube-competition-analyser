@@ -32,6 +32,7 @@ const columns = [
 ]
 
 export function ChannelTable({ rows, darkMode = false }: { rows: ChannelMetrics[]; darkMode?: boolean }) {
+  const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
   const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() })
 
   return (
@@ -44,7 +45,7 @@ export function ChannelTable({ rows, darkMode = false }: { rows: ChannelMetrics[
                 key={header.id}
                 style={{
                   textAlign: 'left',
-                  borderBottom: darkMode ? '1px solid #30363d' : '1px solid #ddd',
+                  borderBottom: `1px solid ${borderColor}`,
                   padding: 8
                 }}
               >
@@ -61,7 +62,7 @@ export function ChannelTable({ rows, darkMode = false }: { rows: ChannelMetrics[
               <td
                 key={cell.id}
                 style={{
-                  borderBottom: darkMode ? '1px solid #21262d' : '1px solid #eee',
+                  borderBottom: `1px solid ${borderColor}`,
                   padding: 8
                 }}
               >
