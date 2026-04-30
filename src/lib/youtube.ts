@@ -8,6 +8,18 @@ export type ChannelMetrics = {
   viewCount: number
 }
 
+export type ChannelVideo = {
+  id: string
+  title: string
+  thumbnailUrl: string
+  publishedAt: string
+  viewCount: number
+  outlierScore: number | null
+  medianBaselineViews: number | null
+  format: 'short' | 'long' | 'live'
+  durationSeconds: number
+}
+
 type YouTubeChannelItem = {
   id: string
   snippet: {
@@ -19,6 +31,36 @@ type YouTubeChannelItem = {
     subscriberCount: string
     videoCount: string
     viewCount: string
+  }
+}
+
+type YouTubeSearchItem = {
+  id: { videoId?: string }
+  snippet: {
+    title: string
+    publishedAt: string
+    thumbnails?: {
+      high?: { url: string }
+      medium?: { url: string }
+      default?: { url: string }
+    }
+  }
+}
+
+type YouTubeVideoItem = {
+  id: string
+  statistics?: {
+    viewCount?: string
+  }
+  contentDetails?: {
+    duration?: string
+  }
+  player?: {
+    embedHtml?: string
+  }
+  liveStreamingDetails?: {
+    actualStartTime?: string
+    scheduledStartTime?: string
   }
 }
 
@@ -70,11 +112,22 @@ async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<You
   return payload.items ?? []
 }
 
-export async function fetchCompetitionMetrics(rawValues: string[], apiKey: string): Promise<ChannelMetrics[]> {
+export async function fetchCompetitionMetrics(
+  rawValues: string[],
+  apiKey: string,
+  options?: { onProgress?: (completed: number, total: number) => void }
+): Promise<ChannelMetrics[]> {
   const deduped = [...new Set(rawValues.map((value) => value.trim()).filter(Boolean))]
   const parsed = deduped.map(parseChannelInput).filter((item): item is ChannelInput => item !== null)
 
-  const data = await Promise.all(parsed.map((item) => fetchChannelsBy(item, apiKey)))
+  const data: YouTubeChannelItem[][] = []
+  options?.onProgress?.(0, parsed.length)
+
+  for (let index = 0; index < parsed.length; index += 1) {
+    const item = parsed[index]
+    data.push(await fetchChannelsBy(item, apiKey))
+    options?.onProgress?.(index + 1, parsed.length)
+  }
 
   return data.flat().map((channel) => ({
     id: channel.id,
@@ -85,4 +138,115 @@ export async function fetchCompetitionMetrics(rawValues: string[], apiKey: strin
     videoCount: Number(channel.statistics.videoCount ?? 0),
     viewCount: Number(channel.statistics.viewCount ?? 0)
   }))
+}
+
+
+function parseIsoDurationToSeconds(duration: string | undefined): number {
+  if (!duration) return 0
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return 0
+  const hours = Number(match[1] ?? 0)
+  const minutes = Number(match[2] ?? 0)
+  const seconds = Number(match[3] ?? 0)
+  return hours * 3600 + minutes * 60 + seconds
+}
+
+function computeMedian(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+export async function fetchChannelVideos(rawValue: string, apiKey: string): Promise<{ channelTitle: string; videos: ChannelVideo[] }> {
+  const parsed = parseChannelInput(rawValue)
+  if (!parsed) throw new Error('Please provide a valid channel URL, handle, or username.')
+
+  const channels = await fetchChannelsBy(parsed, apiKey)
+  const channel = channels[0]
+  if (!channel) throw new Error('Channel not found.')
+
+  const videoItems: YouTubeSearchItem[] = []
+  let nextPageToken: string | undefined
+
+  do {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      channelId: channel.id,
+      type: 'video',
+      maxResults: '50',
+      order: 'date',
+      key: apiKey
+    })
+    if (nextPageToken) params.set('pageToken', nextPageToken)
+
+    const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`)
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`YouTube API search request failed (${response.status}): ${text}`)
+    }
+
+    const payload = (await response.json()) as { items?: YouTubeSearchItem[]; nextPageToken?: string }
+    videoItems.push(...(payload.items ?? []))
+    nextPageToken = payload.nextPageToken
+  } while (nextPageToken)
+
+  const ids = videoItems.map((item) => item.id.videoId).filter((id): id is string => Boolean(id))
+  const viewsById = new Map<string, number>()
+  const durationById = new Map<string, number>()
+  const shortsById = new Map<string, boolean>()
+  const livestreamById = new Map<string, boolean>()
+
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    const params = new URLSearchParams({
+      part: 'statistics,contentDetails,player,liveStreamingDetails',
+      id: chunk.join(','),
+      key: apiKey
+    })
+    const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`)
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`YouTube API videos request failed (${response.status}): ${text}`)
+    }
+    const payload = (await response.json()) as { items?: YouTubeVideoItem[] }
+    for (const item of payload.items ?? []) {
+      viewsById.set(item.id, Number(item.statistics?.viewCount ?? 0))
+      durationById.set(item.id, parseIsoDurationToSeconds(item.contentDetails?.duration))
+      shortsById.set(item.id, (item.player?.embedHtml ?? '').includes('/shorts/'))
+      livestreamById.set(item.id, Boolean(item.liveStreamingDetails?.actualStartTime || item.liveStreamingDetails?.scheduledStartTime))
+    }
+  }
+
+  const chronological = videoItems
+    .map((item) => {
+      const id = item.id.videoId
+      if (!id) return null
+      return {
+        id,
+        title: item.snippet.title,
+        publishedAt: item.snippet.publishedAt,
+        thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
+        viewCount: viewsById.get(id) ?? 0,
+        durationSeconds: durationById.get(id) ?? 0,
+        format: livestreamById.get(id)
+          ? 'live' as const
+          : (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60))
+            ? 'short' as const
+            : 'long' as const
+      }
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
+
+  const pastViewsByFormat: Record<'short' | 'long' | 'live', number[]> = { short: [], long: [], live: [] }
+  const withScores = chronological.map((video) => {
+    const history = pastViewsByFormat[video.format]
+    const median = computeMedian(history)
+    const outlierScore = median && median > 0 ? video.viewCount / median : null
+    history.push(video.viewCount)
+    return { ...video, outlierScore, medianBaselineViews: median }
+  })
+
+  return { channelTitle: channel.snippet.title, videos: withScores }
 }

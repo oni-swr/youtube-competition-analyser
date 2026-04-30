@@ -11,13 +11,27 @@ import type { ChannelMetrics } from '../lib/youtube'
 
 const columnHelper = createColumnHelper<ChannelMetrics>()
 
-export function ChannelTable({ rows, darkMode = false, cpm }: { rows: ChannelMetrics[]; darkMode?: boolean; cpm: number | null }) {
+export function ChannelTable({ rows, darkMode = false, cpm, onChannelClick }: { rows: ChannelMetrics[]; darkMode?: boolean; cpm: number | null; onChannelClick?: (channel: ChannelMetrics) => void }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
 
   const columns = useMemo(
     () => [
-      columnHelper.accessor('title', { header: 'Channel' }),
+      columnHelper.accessor('title', {
+        header: 'Channel',
+        cell: ({ getValue, row }) => {
+          if (!onChannelClick) return getValue()
+          return (
+            <button
+              type="button"
+              onClick={() => onChannelClick(row.original)}
+              style={{ padding: 0, background: 'transparent', border: 'none', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+            >
+              {getValue()}
+            </button>
+          )
+        }
+      }),
       columnHelper.accessor('subscriberCount', {
         header: 'Subscribers',
         cell: ({ getValue }) => getValue().toLocaleString()
@@ -69,7 +83,7 @@ export function ChannelTable({ rows, darkMode = false, cpm }: { rows: ChannelMet
         }
       )
     ],
-    [cpm]
+    [cpm, onChannelClick]
   )
 
   const table = useReactTable({
