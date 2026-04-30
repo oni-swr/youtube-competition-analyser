@@ -28,6 +28,7 @@ const columns = [
   columnHelper.display({
     id: 'viewsPerSubscriber',
     header: 'Views / sub',
+    enableSorting: true,
     sortingFn: (rowA, rowB) => {
       const subscribersA = rowA.original.subscriberCount
       const subscribersB = rowB.original.subscriberCount
