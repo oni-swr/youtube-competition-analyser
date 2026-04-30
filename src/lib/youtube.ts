@@ -8,6 +8,15 @@ export type ChannelMetrics = {
   viewCount: number
 }
 
+export type ChannelVideo = {
+  id: string
+  title: string
+  thumbnailUrl: string
+  publishedAt: string
+  viewCount: number
+  outlierScore: number | null
+}
+
 type YouTubeChannelItem = {
   id: string
   snippet: {
@@ -19,6 +28,26 @@ type YouTubeChannelItem = {
     subscriberCount: string
     videoCount: string
     viewCount: string
+  }
+}
+
+type YouTubeSearchItem = {
+  id: { videoId?: string }
+  snippet: {
+    title: string
+    publishedAt: string
+    thumbnails?: {
+      high?: { url: string }
+      medium?: { url: string }
+      default?: { url: string }
+    }
+  }
+}
+
+type YouTubeVideoItem = {
+  id: string
+  statistics?: {
+    viewCount?: string
   }
 }
 
@@ -85,4 +114,91 @@ export async function fetchCompetitionMetrics(rawValues: string[], apiKey: strin
     videoCount: Number(channel.statistics.videoCount ?? 0),
     viewCount: Number(channel.statistics.viewCount ?? 0)
   }))
+}
+
+function computeMedian(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+export async function fetchChannelVideos(rawValue: string, apiKey: string): Promise<{ channelTitle: string; videos: ChannelVideo[] }> {
+  const parsed = parseChannelInput(rawValue)
+  if (!parsed) throw new Error('Please provide a valid channel URL, handle, or username.')
+
+  const channels = await fetchChannelsBy(parsed, apiKey)
+  const channel = channels[0]
+  if (!channel) throw new Error('Channel not found.')
+
+  const videoItems: YouTubeSearchItem[] = []
+  let nextPageToken: string | undefined
+
+  do {
+    const params = new URLSearchParams({
+      part: 'snippet',
+      channelId: channel.id,
+      type: 'video',
+      maxResults: '50',
+      order: 'date',
+      key: apiKey
+    })
+    if (nextPageToken) params.set('pageToken', nextPageToken)
+
+    const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`)
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`YouTube API search request failed (${response.status}): ${text}`)
+    }
+
+    const payload = (await response.json()) as { items?: YouTubeSearchItem[]; nextPageToken?: string }
+    videoItems.push(...(payload.items ?? []))
+    nextPageToken = payload.nextPageToken
+  } while (nextPageToken)
+
+  const ids = videoItems.map((item) => item.id.videoId).filter((id): id is string => Boolean(id))
+  const viewsById = new Map<string, number>()
+
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50)
+    const params = new URLSearchParams({
+      part: 'statistics',
+      id: chunk.join(','),
+      key: apiKey
+    })
+    const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`)
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(`YouTube API videos request failed (${response.status}): ${text}`)
+    }
+    const payload = (await response.json()) as { items?: YouTubeVideoItem[] }
+    for (const item of payload.items ?? []) {
+      viewsById.set(item.id, Number(item.statistics?.viewCount ?? 0))
+    }
+  }
+
+  const chronological = videoItems
+    .map((item) => {
+      const id = item.id.videoId
+      if (!id) return null
+      return {
+        id,
+        title: item.snippet.title,
+        publishedAt: item.snippet.publishedAt,
+        thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
+        viewCount: viewsById.get(id) ?? 0
+      }
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
+
+  const pastViews: number[] = []
+  const withScores = chronological.map((video) => {
+    const median = computeMedian(pastViews)
+    const outlierScore = median && median > 0 ? video.viewCount / median : null
+    pastViews.push(video.viewCount)
+    return { ...video, outlierScore }
+  })
+
+  return { channelTitle: channel.snippet.title, videos: withScores }
 }
