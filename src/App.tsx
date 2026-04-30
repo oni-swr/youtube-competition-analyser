@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAction } from 'convex/react'
 import { ChannelTable } from './components/ChannelTable'
 import { ChannelAnalysisTable } from './components/ChannelAnalysisTable'
-import { fetchChannelVideos, fetchCompetitionMetrics, type ChannelMetrics, type ChannelVideo } from './lib/youtube'
+import { fetchCompetitionMetrics, type ChannelMetrics, type ChannelVideo } from './lib/youtube'
+import { api } from '../convex/_generated/api'
 
 const STORAGE_KEYS = {
   channels: 'yt-competition-channels',
@@ -47,6 +49,7 @@ export function App() {
     return apiKey
   }
 
+  const getOrFetchChannelAnalysis = useAction(api.channelAnalysisActions.getOrFetchAnalysis)
 
   const competitionProgressPercent =
     competitionProgress && competitionProgress.total > 0
@@ -69,14 +72,12 @@ export function App() {
   }
 
   const loadChannelAnalysis = async (channelValue: string) => {
-    const apiKey = withApiKey()
-    if (!apiKey) return
     setLoading(true)
     setError(null)
     try {
-      const result = await fetchChannelVideos(channelValue, apiKey)
+      const result = await getOrFetchChannelAnalysis({ rawInput: channelValue })
       setAnalysisTitle(result.channelTitle)
-      setAnalysisVideos(result.videos)
+      setAnalysisVideos(result.videos as ChannelVideo[])
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error while fetching channel videos')
     } finally {
