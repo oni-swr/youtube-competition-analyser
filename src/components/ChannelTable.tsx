@@ -16,10 +16,19 @@ const columns = [
   columnHelper.accessor('viewCount', {
     header: 'Total views',
     cell: ({ getValue }) => getValue().toLocaleString()
+  }),
+  columnHelper.display({
+    id: 'viewsPerSubscriber',
+    header: 'Views / sub',
+    cell: ({ row }) => {
+      const { viewCount, subscriberCount } = row.original
+      if (subscriberCount === 0) return '—'
+      return (viewCount / subscriberCount).toFixed(2)
+    }
   })
 ]
 
-export function ChannelTable({ rows }: { rows: ChannelMetrics[] }) {
+export function ChannelTable({ rows, isDarkMode }: { rows: ChannelMetrics[]; isDarkMode: boolean }) {
   const table = useReactTable({ data: rows, columns, getCoreRowModel: getCoreRowModel() })
 
   return (
@@ -28,7 +37,14 @@ export function ChannelTable({ rows }: { rows: ChannelMetrics[] }) {
         {table.getHeaderGroups().map((headerGroup) => (
           <tr key={headerGroup.id}>
             {headerGroup.headers.map((header) => (
-              <th key={header.id} style={{ textAlign: 'left', borderBottom: '1px solid #ddd', padding: 8 }}>
+              <th
+                key={header.id}
+                style={{
+                  textAlign: 'left',
+                  borderBottom: `1px solid ${isDarkMode ? '#334155' : '#ddd'}`,
+                  padding: 8
+                }}
+              >
                 {flexRender(header.column.columnDef.header, header.getContext())}
               </th>
             ))}
@@ -39,7 +55,7 @@ export function ChannelTable({ rows }: { rows: ChannelMetrics[] }) {
         {table.getRowModel().rows.map((row) => (
           <tr key={row.id}>
             {row.getVisibleCells().map((cell) => (
-              <td key={cell.id} style={{ borderBottom: '1px solid #eee', padding: 8 }}>
+              <td key={cell.id} style={{ borderBottom: `1px solid ${isDarkMode ? '#1e293b' : '#eee'}`, padding: 8 }}>
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </td>
             ))}
