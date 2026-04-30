@@ -55,6 +55,9 @@ type YouTubeVideoItem = {
   contentDetails?: {
     duration?: string
   }
+  player?: {
+    embedHtml?: string
+  }
 }
 
 const CHANNEL_ID_REGEX = /(?:youtube\.com\/channel\/)(UC[\w-]{22})/
@@ -176,11 +179,12 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
   const ids = videoItems.map((item) => item.id.videoId).filter((id): id is string => Boolean(id))
   const viewsById = new Map<string, number>()
   const durationById = new Map<string, number>()
+  const shortsById = new Map<string, boolean>()
 
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50)
     const params = new URLSearchParams({
-      part: 'statistics,contentDetails',
+      part: 'statistics,contentDetails,player',
       id: chunk.join(','),
       key: apiKey
     })
@@ -193,6 +197,7 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
     for (const item of payload.items ?? []) {
       viewsById.set(item.id, Number(item.statistics?.viewCount ?? 0))
       durationById.set(item.id, parseIsoDurationToSeconds(item.contentDetails?.duration))
+      shortsById.set(item.id, (item.player?.embedHtml ?? '').includes('/shorts/'))
     }
   }
 
@@ -207,7 +212,7 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
         thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
         viewCount: viewsById.get(id) ?? 0,
         durationSeconds: durationById.get(id) ?? 0,
-        format: (durationById.get(id) ?? 0) <= 60 ? 'short' as const : 'long' as const
+        format: (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60)) ? 'short' as const : 'long' as const
       }
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
