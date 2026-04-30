@@ -15,6 +15,8 @@ export type ChannelVideo = {
   publishedAt: string
   viewCount: number
   outlierScore: number | null
+  format: 'short' | 'long'
+  durationSeconds: number
 }
 
 type YouTubeChannelItem = {
@@ -48,6 +50,9 @@ type YouTubeVideoItem = {
   id: string
   statistics?: {
     viewCount?: string
+  }
+  contentDetails?: {
+    duration?: string
   }
 }
 
@@ -116,6 +121,17 @@ export async function fetchCompetitionMetrics(rawValues: string[], apiKey: strin
   }))
 }
 
+
+function parseIsoDurationToSeconds(duration: string | undefined): number {
+  if (!duration) return 0
+  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/)
+  if (!match) return 0
+  const hours = Number(match[1] ?? 0)
+  const minutes = Number(match[2] ?? 0)
+  const seconds = Number(match[3] ?? 0)
+  return hours * 3600 + minutes * 60 + seconds
+}
+
 function computeMedian(values: number[]): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)
@@ -158,11 +174,12 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
 
   const ids = videoItems.map((item) => item.id.videoId).filter((id): id is string => Boolean(id))
   const viewsById = new Map<string, number>()
+  const durationById = new Map<string, number>()
 
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50)
     const params = new URLSearchParams({
-      part: 'statistics',
+      part: 'statistics,contentDetails',
       id: chunk.join(','),
       key: apiKey
     })
@@ -174,6 +191,7 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
     const payload = (await response.json()) as { items?: YouTubeVideoItem[] }
     for (const item of payload.items ?? []) {
       viewsById.set(item.id, Number(item.statistics?.viewCount ?? 0))
+      durationById.set(item.id, parseIsoDurationToSeconds(item.contentDetails?.duration))
     }
   }
 
@@ -186,17 +204,20 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
         title: item.snippet.title,
         publishedAt: item.snippet.publishedAt,
         thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
-        viewCount: viewsById.get(id) ?? 0
+        viewCount: viewsById.get(id) ?? 0,
+        durationSeconds: durationById.get(id) ?? 0,
+        format: (durationById.get(id) ?? 0) <= 60 ? 'short' as const : 'long' as const
       }
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
 
-  const pastViews: number[] = []
+  const pastViewsByFormat: Record<'short' | 'long', number[]> = { short: [], long: [] }
   const withScores = chronological.map((video) => {
-    const median = computeMedian(pastViews)
+    const history = pastViewsByFormat[video.format]
+    const median = computeMedian(history)
     const outlierScore = median && median > 0 ? video.viewCount / median : null
-    pastViews.push(video.viewCount)
+    history.push(video.viewCount)
     return { ...video, outlierScore }
   })
 

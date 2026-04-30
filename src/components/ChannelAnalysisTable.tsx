@@ -2,13 +2,16 @@ import { useMemo, useState } from 'react'
 import type { ChannelVideo } from '../lib/youtube'
 
 type SortMode = 'outlier' | 'newest' | 'oldest' | 'views'
+type FormatFilter = 'all' | 'short' | 'long'
 
 export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVideo[]; darkMode?: boolean }) {
   const [sortMode, setSortMode] = useState<SortMode>('outlier')
+  const [formatFilter, setFormatFilter] = useState<FormatFilter>('all')
   const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
 
   const sortedVideos = useMemo(() => {
-    const sorted = [...videos]
+    const filtered = formatFilter === 'all' ? videos : videos.filter((video) => video.format === formatFilter)
+    const sorted = [...filtered]
     if (sortMode === 'newest') {
       sorted.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     } else if (sortMode === 'oldest') {
@@ -19,11 +22,17 @@ export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVide
       sorted.sort((a, b) => (b.outlierScore ?? Number.NEGATIVE_INFINITY) - (a.outlierScore ?? Number.NEGATIVE_INFINITY))
     }
     return sorted
-  }, [sortMode, videos])
+  }, [formatFilter, sortMode, videos])
 
   return (
     <section style={{ marginTop: 16 }}>
       <div style={{ marginBottom: 12 }}>
+        <label htmlFor="video-format" style={{ marginRight: 8 }}>Type</label>
+        <select id="video-format" value={formatFilter} onChange={(event) => setFormatFilter(event.target.value as FormatFilter)} style={{ marginRight: 12 }}>
+          <option value="all">All videos</option>
+          <option value="short">Shorts</option>
+          <option value="long">Long-form</option>
+        </select>
         <label htmlFor="video-sort" style={{ marginRight: 8 }}>Sort by</label>
         <select id="video-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
           <option value="outlier">Outlier score</option>
