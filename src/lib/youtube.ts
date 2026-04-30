@@ -16,7 +16,7 @@ export type ChannelVideo = {
   viewCount: number
   outlierScore: number | null
   medianBaselineViews: number | null
-  format: 'short' | 'long'
+  format: 'short' | 'long' | 'live'
   durationSeconds: number
 }
 
@@ -57,6 +57,10 @@ type YouTubeVideoItem = {
   }
   player?: {
     embedHtml?: string
+  }
+  liveStreamingDetails?: {
+    actualStartTime?: string
+    scheduledStartTime?: string
   }
 }
 
@@ -180,11 +184,12 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
   const viewsById = new Map<string, number>()
   const durationById = new Map<string, number>()
   const shortsById = new Map<string, boolean>()
+  const livestreamById = new Map<string, boolean>()
 
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50)
     const params = new URLSearchParams({
-      part: 'statistics,contentDetails,player',
+      part: 'statistics,contentDetails,player,liveStreamingDetails',
       id: chunk.join(','),
       key: apiKey
     })
@@ -198,6 +203,7 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
       viewsById.set(item.id, Number(item.statistics?.viewCount ?? 0))
       durationById.set(item.id, parseIsoDurationToSeconds(item.contentDetails?.duration))
       shortsById.set(item.id, (item.player?.embedHtml ?? '').includes('/shorts/'))
+      livestreamById.set(item.id, Boolean(item.liveStreamingDetails?.actualStartTime || item.liveStreamingDetails?.scheduledStartTime))
     }
   }
 
@@ -212,13 +218,17 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
         thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? '',
         viewCount: viewsById.get(id) ?? 0,
         durationSeconds: durationById.get(id) ?? 0,
-        format: (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60)) ? 'short' as const : 'long' as const
+        format: livestreamById.get(id)
+          ? 'live' as const
+          : (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60))
+            ? 'short' as const
+            : 'long' as const
       }
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => new Date(a.publishedAt).getTime() - new Date(b.publishedAt).getTime())
 
-  const pastViewsByFormat: Record<'short' | 'long', number[]> = { short: [], long: [] }
+  const pastViewsByFormat: Record<'short' | 'long' | 'live', number[]> = { short: [], long: [], live: [] }
   const withScores = chronological.map((video) => {
     const history = pastViewsByFormat[video.format]
     const median = computeMedian(history)

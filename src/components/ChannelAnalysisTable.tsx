@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { ChannelVideo } from '../lib/youtube'
 
 type SortMode = 'outlier' | 'newest' | 'oldest' | 'views'
-type FormatFilter = 'all' | 'short' | 'long'
+type FormatFilter = 'all' | 'short' | 'long' | 'live'
 
 export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVideo[]; darkMode?: boolean }) {
   const [sortMode, setSortMode] = useState<SortMode>('outlier')
@@ -32,6 +32,7 @@ export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVide
           <option value="all">All videos</option>
           <option value="short">Shorts</option>
           <option value="long">Long-form</option>
+          <option value="live">Livestreams</option>
         </select>
         <label htmlFor="video-sort" style={{ marginRight: 8 }}>Sort by</label>
         <select id="video-sort" value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
