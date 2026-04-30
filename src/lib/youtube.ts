@@ -112,11 +112,22 @@ async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<You
   return payload.items ?? []
 }
 
-export async function fetchCompetitionMetrics(rawValues: string[], apiKey: string): Promise<ChannelMetrics[]> {
+export async function fetchCompetitionMetrics(
+  rawValues: string[],
+  apiKey: string,
+  options?: { onProgress?: (completed: number, total: number) => void }
+): Promise<ChannelMetrics[]> {
   const deduped = [...new Set(rawValues.map((value) => value.trim()).filter(Boolean))]
   const parsed = deduped.map(parseChannelInput).filter((item): item is ChannelInput => item !== null)
 
-  const data = await Promise.all(parsed.map((item) => fetchChannelsBy(item, apiKey)))
+  const data: YouTubeChannelItem[][] = []
+  options?.onProgress?.(0, parsed.length)
+
+  for (let index = 0; index < parsed.length; index += 1) {
+    const item = parsed[index]
+    data.push(await fetchChannelsBy(item, apiKey))
+    options?.onProgress?.(index + 1, parsed.length)
+  }
 
   return data.flat().map((channel) => ({
     id: channel.id,

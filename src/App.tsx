@@ -14,6 +14,7 @@ export function App() {
   const [rawInput, setRawInput] = useState(() => localStorage.getItem(STORAGE_KEYS.channels) ?? '')
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem(STORAGE_KEYS.darkMode) === 'true')
   const [loading, setLoading] = useState(false)
+  const [competitionProgress, setCompetitionProgress] = useState<{ completed: number; total: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [rows, setRows] = useState<ChannelMetrics[]>([])
   const [cpmInput, setCpmInput] = useState(() => localStorage.getItem(STORAGE_KEYS.cpm) ?? '')
@@ -46,17 +47,24 @@ export function App() {
     return apiKey
   }
 
+
+  const competitionProgressPercent =
+    competitionProgress && competitionProgress.total > 0
+      ? Math.round((competitionProgress.completed / competitionProgress.total) * 100)
+      : 0
+
   const fetchData = async () => {
     const apiKey = withApiKey()
     if (!apiKey) return
     setLoading(true)
     setError(null)
     try {
-      setRows(await fetchCompetitionMetrics(channels, apiKey))
+      setRows(await fetchCompetitionMetrics(channels, apiKey, { onProgress: (completed, total) => setCompetitionProgress({ completed, total }) }))
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error while fetching channels')
     } finally {
       setLoading(false)
+      setCompetitionProgress(null)
     }
   }
 
@@ -73,6 +81,7 @@ export function App() {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error while fetching channel videos')
     } finally {
       setLoading(false)
+      setCompetitionProgress(null)
     }
   }
 
@@ -104,6 +113,17 @@ export function App() {
           <p style={{ color: theme.mutedText }}>Paste one channel URL, handle, or username per line.</p>
           <textarea value={rawInput} onChange={(event) => setRawInput(event.target.value)} rows={8} style={{ width: '100%', padding: 10, borderRadius: 8, border: `1px solid ${theme.panelBorder}`, backgroundColor: theme.inputBg, color: theme.text }} placeholder={'https://www.youtube.com/@MrBeast\nhttps://www.youtube.com/user/PewDiePie'} />
           <div style={{ marginTop: 12 }}><button type="button" onClick={fetchData} disabled={loading || channels.length === 0}>{loading ? 'Loading…' : 'Analyse competitors'}</button></div>
+          {loading && competitionProgress ? (
+            <section style={{ marginTop: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: theme.mutedText }}>
+                <span>Fetching channels…</span>
+                <span>{competitionProgress.completed}/{competitionProgress.total} ({competitionProgressPercent}%)</span>
+              </div>
+              <div style={{ width: '100%', height: 10, borderRadius: 999, backgroundColor: theme.pageBg, overflow: 'hidden' }}>
+                <div style={{ width: `${competitionProgressPercent}%`, height: '100%', backgroundColor: '#3b82f6', transition: 'width 0.2s ease' }} />
+              </div>
+            </section>
+          ) : null}
           <section style={{ marginTop: 16 }}>
             <label htmlFor="cpm-input" style={{ display: 'block', marginBottom: 8, color: theme.mutedText }}>CPM value (USD)</label>
             <input id="cpm-input" type="number" min={0} step="0.01" value={cpmInput} onChange={(event) => setCpmInput(event.target.value)} placeholder="e.g. 5.50" style={{ width: '100%', maxWidth: 240, padding: 10, borderRadius: 8, border: `1px solid ${theme.panelBorder}`, backgroundColor: theme.inputBg, color: theme.text }} />
