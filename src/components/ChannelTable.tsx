@@ -15,44 +15,35 @@ const columns = [
   columnHelper.accessor('title', { header: 'Channel' }),
   columnHelper.accessor('subscriberCount', {
     header: 'Subscribers',
-    enableSorting: true,
-    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
   columnHelper.accessor('videoCount', {
     header: 'Videos',
-    enableSorting: true,
-    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
   columnHelper.accessor('viewCount', {
     header: 'Total views',
-    enableSorting: true,
-    sortingFn: 'basic',
     cell: ({ getValue }) => getValue().toLocaleString()
   }),
-  columnHelper.display({
-    id: 'viewsPerSubscriber',
-    header: 'Views / sub',
-    enableSorting: true,
-    sortingFn: (rowA, rowB) => {
-      const subscribersA = rowA.original.subscriberCount
-      const subscribersB = rowB.original.subscriberCount
-
-      const ratioA = subscribersA === 0 ? Number.NEGATIVE_INFINITY : rowA.original.viewCount / subscribersA
-      const ratioB = subscribersB === 0 ? Number.NEGATIVE_INFINITY : rowB.original.viewCount / subscribersB
-
-      return ratioA - ratioB
-    },
-    cell: ({ row }) => {
-      const subscribers = row.original.subscriberCount
-      const views = row.original.viewCount
-      if (subscribers === 0) {
-        return 'N/A'
+  columnHelper.accessor(
+    (row) => {
+      if (row.subscriberCount === 0) {
+        return Number.NEGATIVE_INFINITY
       }
-      return (views / subscribers).toFixed(2)
+      return row.viewCount / row.subscriberCount
+    },
+    {
+      id: 'viewsPerSubscriber',
+      header: 'Views / sub',
+      cell: ({ getValue }) => {
+        const value = getValue()
+        if (value === Number.NEGATIVE_INFINITY) {
+          return 'N/A'
+        }
+        return value.toFixed(2)
+      }
     }
-  })
+  )
 ]
 
 export function ChannelTable({ rows, darkMode = false }: { rows: ChannelMetrics[]; darkMode?: boolean }) {
