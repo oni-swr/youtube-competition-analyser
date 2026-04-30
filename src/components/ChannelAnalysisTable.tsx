@@ -49,6 +49,7 @@ export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVide
             <th style={{ textAlign: 'left', padding: 8, borderBottom: `1px solid ${borderColor}` }}>Published</th>
             <th style={{ textAlign: 'left', padding: 8, borderBottom: `1px solid ${borderColor}` }}>Views</th>
             <th style={{ textAlign: 'left', padding: 8, borderBottom: `1px solid ${borderColor}` }}>Outlier score</th>
+            <th style={{ textAlign: 'left', padding: 8, borderBottom: `1px solid ${borderColor}` }}>Median baseline views</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +63,9 @@ export function ChannelAnalysisTable({ videos, darkMode }: { videos: ChannelVide
               <td style={{ padding: 8, borderBottom: `1px solid ${borderColor}` }}>{video.viewCount.toLocaleString()}</td>
               <td style={{ padding: 8, borderBottom: `1px solid ${borderColor}` }}>
                 {video.outlierScore === null ? 'N/A' : `${video.outlierScore.toFixed(2)}x`}
+              </td>
+              <td style={{ padding: 8, borderBottom: `1px solid ${borderColor}` }}>
+                {video.medianBaselineViews === null ? 'N/A' : Math.round(video.medianBaselineViews).toLocaleString()}
               </td>
             </tr>
           ))}

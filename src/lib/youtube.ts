@@ -15,6 +15,7 @@ export type ChannelVideo = {
   publishedAt: string
   viewCount: number
   outlierScore: number | null
+  medianBaselineViews: number | null
   format: 'short' | 'long'
   durationSeconds: number
 }
@@ -218,7 +219,7 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
     const median = computeMedian(history)
     const outlierScore = median && median > 0 ? video.viewCount / median : null
     history.push(video.viewCount)
-    return { ...video, outlierScore }
+    return { ...video, outlierScore, medianBaselineViews: median }
   })
 
   return { channelTitle: channel.snippet.title, videos: withScores }
