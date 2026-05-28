@@ -1,0 +1,54 @@
+name: Zig CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      ZIG_VERSION: 0.16.0
+      ZIG_DIR: zig-x86_64-linux-0.16.0
+      ZIG_ARCHIVE: zig-x86_64-linux-0.16.0.tar.xz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Zig
+        id: cache-zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/zig/${{ env.ZIG_DIR }}
+            ~/.cache/zig/${{ env.ZIG_ARCHIVE }}
+          key: zig-${{ env.ZIG_VERSION }}-linux-x86_64
+
+      - name: Install Zig
+        if: steps.cache-zig.outputs.cache-hit != 'true'
+        run: |
+          set -euxo pipefail
+          mkdir -p ~/.cache/zig
+          cd ~/.cache/zig
+
+          rm -f "$ZIG_ARCHIVE"
+
+          curl -fL --retry 3 --retry-delay 2 -o "$ZIG_ARCHIVE" "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_ARCHIVE}"
+
+          tar -tf "$ZIG_ARCHIVE" >/dev/null
+          tar -xf "$ZIG_ARCHIVE"
+
+      - name: Add Zig to PATH
+        run: echo "$HOME/.cache/zig/${ZIG_DIR}" >> "$GITHUB_PATH"
+
+      - name: Install Linux dependencies (X11 and OpenGL)
+        run: sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev libxi-dev libxcursor-dev libxrandr-dev libxinerama-dev libwayland-dev libxkbcommon-dev
+
+      - name: Show Zig version
+        run: zig version
+
+      - name: Run tests
+        run: zig build test
