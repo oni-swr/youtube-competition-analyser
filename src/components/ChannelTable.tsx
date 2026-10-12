@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { memo, useState, useMemo } from 'react'
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
   getSortedRowModel,
+  getPaginationRowModel,
   useReactTable,
   type SortingState
 } from '@tanstack/react-table'
@@ -11,7 +12,7 @@ import type { ChannelMetrics } from '../lib/youtube'
 
 const columnHelper = createColumnHelper<ChannelMetrics>()
 
-export function ChannelTable({ rows, darkMode = false, cpm, onChannelClick }: { rows: ChannelMetrics[]; darkMode?: boolean; cpm: number | null; onChannelClick?: (channel: ChannelMetrics) => void }) {
+export const ChannelTable = memo(function ChannelTable({ rows, darkMode = false, cpm, onChannelClick }: { rows: ChannelMetrics[]; darkMode?: boolean; cpm: number | null; onChannelClick?: (channel: ChannelMetrics) => void }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const borderColor = darkMode ? '#3a3a3a' : '#e4e4e7'
 
@@ -92,10 +93,13 @@ export function ChannelTable({ rows, darkMode = false, cpm, onChannelClick }: { 
     state: { sorting },
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel()
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageIndex: 0, pageSize: 50 } }
   })
 
   return (
+    <>
     <table style={{ borderCollapse: 'collapse', width: '100%', marginTop: 16 }}>
       <thead>
         {table.getHeaderGroups().map((headerGroup) => (
@@ -142,5 +146,11 @@ export function ChannelTable({ rows, darkMode = false, cpm, onChannelClick }: { 
         ))}
       </tbody>
     </table>
+    <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 12 }}>
+      <button type="button" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>Previous</button>
+      <span>Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())} · {rows.length} channels</span>
+      <button type="button" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Next</button>
+    </div>
+    </>
   )
-}
+})

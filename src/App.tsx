@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useAction } from 'convex/react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useConvex, useMutation } from 'convex/react'
 import { ChannelTable } from './components/ChannelTable'
 import { ChannelAnalysisTable } from './components/ChannelAnalysisTable'
 import { fetchCompetitionMetrics, type ChannelMetrics, type ChannelVideo } from './lib/youtube'
 import { api } from '../convex/_generated/api'
+import { loadChannelAnalysis as loadCachedChannelAnalysis } from './lib/channelAnalysis'
 
 const STORAGE_KEYS = {
   channels: 'yt-competition-channels',
@@ -49,7 +50,8 @@ export function App() {
     return apiKey
   }
 
-  const getOrFetchChannelAnalysis = useAction(api.channelAnalysisActions.getOrFetchAnalysis)
+  const convex = useConvex()
+  const saveChannelAnalysis = useMutation(api.channelAnalysis.upsert)
 
   const competitionProgressPercent =
     competitionProgress && competitionProgress.total > 0
@@ -71,11 +73,14 @@ export function App() {
     }
   }
 
-  const loadChannelAnalysis = async (channelValue: string) => {
+  const loadChannelAnalysis = useCallback(async (channelValue: string) => {
     setLoading(true)
     setError(null)
     try {
-      const result = await getOrFetchChannelAnalysis({ rawInput: channelValue })
+      const result = await loadCachedChannelAnalysis(channelValue, import.meta.env.VITE_YOUTUBE_API_KEY, {
+        get: (lookupKey) => convex.query(api.channelAnalysis.getByLookupKey, { lookupKey }),
+        save: saveChannelAnalysis
+      })
       setAnalysisTitle(result.channelTitle)
       setAnalysisVideos(result.videos as ChannelVideo[])
     } catch (fetchError) {
@@ -84,18 +89,18 @@ export function App() {
       setLoading(false)
       setCompetitionProgress(null)
     }
-  }
+  }, [convex, saveChannelAnalysis])
 
   const fetchAnalysis = async () => {
     await loadChannelAnalysis(analysisInput)
   }
 
-  const handleChannelClick = async (channel: ChannelMetrics) => {
+  const handleChannelClick = useCallback(async (channel: ChannelMetrics) => {
     const channelValue = `https://www.youtube.com/channel/${channel.id}`
     setAnalysisInput(channelValue)
     setActiveTab('channel-analysis')
     await loadChannelAnalysis(channelValue)
-  }
+  }, [loadChannelAnalysis])
 
   return (
     <main style={{ maxWidth: 980, margin: '0 auto', padding: 24, fontFamily: 'Inter, Arial, sans-serif', minHeight: '100vh', backgroundColor: theme.panelBg, color: theme.text, border: `1px solid ${theme.panelBorder}`, borderRadius: 12, transition: 'background-color 0.2s ease, color 0.2s ease' }}>

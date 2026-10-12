@@ -9,7 +9,6 @@
  */
 
 import type * as channelAnalysis from "../channelAnalysis.js";
-import type * as channelAnalysisActions from "../channelAnalysisActions.js";
 
 import type {
   ApiFromModules,
@@ -19,7 +18,6 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   channelAnalysis: typeof channelAnalysis;
-  channelAnalysisActions: typeof channelAnalysisActions;
 }>;
 
 /**
