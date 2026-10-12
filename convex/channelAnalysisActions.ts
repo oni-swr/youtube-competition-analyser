@@ -1,5 +1,7 @@
+/// <reference types="node" />
 "use node";
 
+import process from "node:process";
 import { v } from "convex/values";
 import { action } from "./_generated/server";
 import { api } from "./_generated/api";
@@ -42,6 +44,7 @@ type YouTubeSearchItem = {
 function parseChannelInput(rawValue: string): ChannelInput | null {
   const value = rawValue.trim();
   if (!value) return null;
+  if (/^UC[\w-]{22}$/.test(value)) return { kind: "channelId", value };
   const channelIdMatch = value.match(CHANNEL_ID_REGEX);
   if (channelIdMatch) return { kind: "channelId", value: channelIdMatch[1] };
   const handleMatch = value.match(HANDLE_REGEX);
@@ -53,7 +56,7 @@ function parseChannelInput(rawValue: string): ChannelInput | null {
 }
 
 function lookupKeyFor(input: ChannelInput): string {
-  return `${input.kind}:${input.value.toLowerCase()}`;
+  return `${input.kind}:${input.kind === "channelId" ? input.value : input.value.toLowerCase()}`;
 }
 
 async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<YouTubeChannelItem[]> {
@@ -86,13 +89,13 @@ function computeMedian(values: number[]): number | null {
 
 export const getOrFetchAnalysis = action({
   args: { rawInput: v.string() },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ channelTitle: string; videos: ChannelVideo[]; source: "cache" | "api" }> => {
     const parsed = parseChannelInput(args.rawInput);
     if (!parsed) throw new Error("Please provide a valid channel URL, handle, or username.");
 
     const key = lookupKeyFor(parsed);
     const cached = await ctx.runQuery(api.channelAnalysis.getByLookupKey, { lookupKey: key });
-    if (cached) {
+    if (cached && Date.now() - cached.fetchedAt < 24 * 60 * 60 * 1000) {
       return { channelTitle: cached.channelTitle, videos: cached.videos, source: "cache" as const };
     }
 
@@ -136,7 +139,7 @@ export const getOrFetchAnalysis = action({
           thumbnailUrl: item.snippet.thumbnails?.high?.url ?? item.snippet.thumbnails?.medium?.url ?? item.snippet.thumbnails?.default?.url ?? "",
           viewCount: viewsById.get(id) ?? 0,
           durationSeconds: durationById.get(id) ?? 0,
-          format: livestreamById.get(id) ? "live" : (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60)) ? "short" : "long",
+          format: livestreamById.get(id) ? "live" as const : (shortsById.get(id) ?? ((durationById.get(id) ?? 0) <= 60)) ? "short" as const : "long" as const,
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)

@@ -114,6 +114,7 @@ export function App() {
           <p style={{ color: theme.mutedText }}>Paste one channel URL, handle, or username per line.</p>
           <textarea value={rawInput} onChange={(event) => setRawInput(event.target.value)} rows={8} style={{ width: '100%', padding: 10, borderRadius: 8, border: `1px solid ${theme.panelBorder}`, backgroundColor: theme.inputBg, color: theme.text }} placeholder={'https://www.youtube.com/@MrBeast\nhttps://www.youtube.com/user/PewDiePie'} />
           <div style={{ marginTop: 12 }}><button type="button" onClick={fetchData} disabled={loading || channels.length === 0}>{loading ? 'Loading…' : 'Analyse competitors'}</button></div>
+          <p style={{ color: theme.mutedText }}>Channel results are cached for 24 hours in this browser. Only new or expired channels are fetched.</p>
           {loading && competitionProgress ? (
             <section style={{ marginTop: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: theme.mutedText }}>

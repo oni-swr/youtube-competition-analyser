@@ -1,3 +1,5 @@
+import { cachedYouTubeResult, cacheYouTubeAlias } from './youtubeCache'
+
 export type ChannelMetrics = {
   id: string
   title: string
@@ -77,6 +79,8 @@ export function parseChannelInput(rawValue: string): ChannelInput | null {
   const value = rawValue.trim()
   if (!value) return null
 
+  if (/^UC[\w-]{22}$/.test(value)) return { kind: 'channelId', value }
+
   const channelIdMatch = value.match(CHANNEL_ID_REGEX)
   if (channelIdMatch) return { kind: 'channelId', value: channelIdMatch[1] }
 
@@ -92,6 +96,8 @@ export function parseChannelInput(rawValue: string): ChannelInput | null {
 }
 
 async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<YouTubeChannelItem[]> {
+  const key = `channel:${input.kind}:${input.kind === 'channelId' ? input.value : input.value.toLowerCase()}`
+  return cachedYouTubeResult(key, async () => {
   const queryParam =
     input.kind === 'channelId'
       ? `id=${encodeURIComponent(input.value)}`
@@ -109,7 +115,15 @@ async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<You
   }
 
   const payload = (await response.json()) as { items: YouTubeChannelItem[] }
-  return payload.items ?? []
+  const items = payload.items ?? []
+  for (const channel of items) {
+    cacheYouTubeAlias(`channel:channelId:${channel.id}`, [channel])
+    if (channel.snippet.customUrl?.startsWith('@')) {
+      cacheYouTubeAlias(`channel:forHandle:${channel.snippet.customUrl.toLowerCase()}`, [channel])
+    }
+  }
+  return items
+  })
 }
 
 export async function fetchCompetitionMetrics(
@@ -165,6 +179,8 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
   const channels = await fetchChannelsBy(parsed, apiKey)
   const channel = channels[0]
   if (!channel) throw new Error('Channel not found.')
+
+  return cachedYouTubeResult(`videos:${channel.id}`, async () => {
 
   const videoItems: YouTubeSearchItem[] = []
   let nextPageToken: string | undefined
@@ -249,4 +265,5 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
   })
 
   return { channelTitle: channel.snippet.title, videos: withScores }
+  })
 }
