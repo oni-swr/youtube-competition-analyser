@@ -17,6 +17,7 @@ export const upsert = mutation({
     requestedInput: v.string(),
     channelId: v.string(),
     channelTitle: v.string(),
+    fetchedAt: v.optional(v.number()),
     videos: v.array(
       v.object({
         id: v.string(),
@@ -32,6 +33,7 @@ export const upsert = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    if (args.videos.length > 50) throw new Error("Analysis supports at most 50 videos.");
     const existing = await ctx.db
       .query("channelAnalyses")
       .withIndex("by_lookupKey", (q) => q.eq("lookupKey", args.lookupKey))
@@ -39,7 +41,9 @@ export const upsert = mutation({
 
     const payload = {
       ...args,
-      fetchedAt: Date.now(),
+      // Preserve the original browser fetch time instead of extending the TTL
+      // when a locally cached result is copied into Convex.
+      fetchedAt: Math.min(args.fetchedAt ?? Date.now(), Date.now()),
     };
 
     if (existing) {

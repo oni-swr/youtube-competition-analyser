@@ -8,13 +8,17 @@
  * @module
  */
 
+import type * as channelAnalysis from "../channelAnalysis.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  channelAnalysis: typeof channelAnalysis;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.

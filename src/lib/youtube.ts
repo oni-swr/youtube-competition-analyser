@@ -1,3 +1,5 @@
+import { cachedYouTubeResult, cacheYouTubeAlias } from './youtubeCache'
+
 export type ChannelMetrics = {
   id: string
   title: string
@@ -18,6 +20,13 @@ export type ChannelVideo = {
   medianBaselineViews: number | null
   format: 'short' | 'long' | 'live'
   durationSeconds: number
+}
+
+export type ChannelAnalysisResult = {
+  channelId: string
+  channelTitle: string
+  videos: ChannelVideo[]
+  fetchedAt: number
 }
 
 type YouTubeChannelItem = {
@@ -77,6 +86,8 @@ export function parseChannelInput(rawValue: string): ChannelInput | null {
   const value = rawValue.trim()
   if (!value) return null
 
+  if (/^UC[\w-]{22}$/.test(value)) return { kind: 'channelId', value }
+
   const channelIdMatch = value.match(CHANNEL_ID_REGEX)
   if (channelIdMatch) return { kind: 'channelId', value: channelIdMatch[1] }
 
@@ -92,6 +103,8 @@ export function parseChannelInput(rawValue: string): ChannelInput | null {
 }
 
 async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<YouTubeChannelItem[]> {
+  const key = `channel:${input.kind}:${input.kind === 'channelId' ? input.value : input.value.toLowerCase()}`
+  return cachedYouTubeResult(key, async () => {
   const queryParam =
     input.kind === 'channelId'
       ? `id=${encodeURIComponent(input.value)}`
@@ -109,7 +122,15 @@ async function fetchChannelsBy(input: ChannelInput, apiKey: string): Promise<You
   }
 
   const payload = (await response.json()) as { items: YouTubeChannelItem[] }
-  return payload.items ?? []
+  const items = payload.items ?? []
+  for (const channel of items) {
+    cacheYouTubeAlias(`channel:channelId:${channel.id}`, [channel])
+    if (channel.snippet.customUrl?.startsWith('@')) {
+      cacheYouTubeAlias(`channel:forHandle:${channel.snippet.customUrl.toLowerCase()}`, [channel])
+    }
+  }
+  return items
+  })
 }
 
 export async function fetchCompetitionMetrics(
@@ -123,10 +144,17 @@ export async function fetchCompetitionMetrics(
   const data: YouTubeChannelItem[][] = []
   options?.onProgress?.(0, parsed.length)
 
+  // Even resolved cache promises stay in the microtask queue. Give the browser
+  // a turn to paint loading/progress and process input between small batches.
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
   for (let index = 0; index < parsed.length; index += 1) {
     const item = parsed[index]
     data.push(await fetchChannelsBy(item, apiKey))
     options?.onProgress?.(index + 1, parsed.length)
+    if ((index + 1) % 25 === 0 && index + 1 < parsed.length) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    }
   }
 
   return data.flat().map((channel) => ({
@@ -158,7 +186,7 @@ function computeMedian(values: number[]): number | null {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
 }
 
-export async function fetchChannelVideos(rawValue: string, apiKey: string): Promise<{ channelTitle: string; videos: ChannelVideo[] }> {
+export async function fetchChannelVideos(rawValue: string, apiKey: string): Promise<ChannelAnalysisResult> {
   const parsed = parseChannelInput(rawValue)
   if (!parsed) throw new Error('Please provide a valid channel URL, handle, or username.')
 
@@ -166,10 +194,12 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
   const channel = channels[0]
   if (!channel) throw new Error('Channel not found.')
 
-  const videoItems: YouTubeSearchItem[] = []
-  let nextPageToken: string | undefined
+  return cachedYouTubeResult(`analysis-v2:${channel.id}`, async () => {
 
-  do {
+  const videoItems: YouTubeSearchItem[] = []
+
+  // Keep the existing analysis scope: the latest 50 videos per channel.
+  {
     const params = new URLSearchParams({
       part: 'snippet',
       channelId: channel.id,
@@ -178,7 +208,6 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
       order: 'date',
       key: apiKey
     })
-    if (nextPageToken) params.set('pageToken', nextPageToken)
 
     const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`)
     if (!response.ok) {
@@ -186,10 +215,9 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
       throw new Error(`YouTube API search request failed (${response.status}): ${text}`)
     }
 
-    const payload = (await response.json()) as { items?: YouTubeSearchItem[]; nextPageToken?: string }
+    const payload = (await response.json()) as { items?: YouTubeSearchItem[] }
     videoItems.push(...(payload.items ?? []))
-    nextPageToken = payload.nextPageToken
-  } while (nextPageToken)
+  }
 
   const ids = videoItems.map((item) => item.id.videoId).filter((id): id is string => Boolean(id))
   const viewsById = new Map<string, number>()
@@ -248,5 +276,6 @@ export async function fetchChannelVideos(rawValue: string, apiKey: string): Prom
     return { ...video, outlierScore, medianBaselineViews: median }
   })
 
-  return { channelTitle: channel.snippet.title, videos: withScores }
+  return { channelId: channel.id, channelTitle: channel.snippet.title, videos: withScores, fetchedAt: Date.now() }
+  })
 }
